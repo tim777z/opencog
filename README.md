@@ -179,3 +179,21 @@ Ubuntu standard version (1.34).
 -Wno-deprecated is currently enabled by default to avoid a number of
 warnings regarding hash_map being deprecated (because the alternative
 is still experimental!)
+
+## Getting Started
+
+### Prerequisites
+- CMake
+- C++ compiler
+
+### Install
+```bash
+mkdir build && cd build
+cmake ..
+make -j$(nproc)
+```
+
+### Test
+```bash
+make test
+```
