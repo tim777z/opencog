@@ -1,13 +1,24 @@
 __author__ = 'Cosmo Harrigan'
 
-import opencog.cogserver
-from web.api.apimain import RESTAPI
+import logging
 from threading import Thread
 
+import opencog.cogserver
+from apisecurity import ApiSecurityConfig, assert_safe_bind
+from web.api.apimain import RESTAPI
+
+logger = logging.getLogger('opencog.restapi')
+
 # Endpoint configuration
-# To allow public access, set to 0.0.0.0; for local access, set to 127.0.0.1
-IP_ADDRESS = '0.0.0.0'
-PORT = 5000
+#
+# Historically this module hard-coded IP_ADDRESS = '0.0.0.0' and PORT = 5000,
+# which published an unauthenticated cogserver/Scheme endpoint (i.e. remote
+# code execution) on every interface of the host.  Both values are now taken
+# from the environment and default to loopback; see
+# opencog/python/web/api/apisecurity.py for the full policy.
+CONFIG = ApiSecurityConfig.from_env()
+IP_ADDRESS = CONFIG.bind_host
+PORT = CONFIG.bind_port
 
 
 class Start(opencog.cogserver.Request):
@@ -41,17 +52,24 @@ class Start(opencog.cogserver.Request):
 
     def __init__(self):
         self.atomspace = None  # Will be passed as argument in run method
+        self.api = None
+        self.config = CONFIG
 
-    def run(self, args, atomspace):        
+    def run(self, args, atomspace):
         self.atomspace = atomspace
+        # Refuse to start on a routable interface without authentication.
+        # Failing here is much better than coming up as an open RCE service.
+        assert_safe_bind(self.config)
         '''
         make a daemon thread so that it can be interrupted
         '''
         thread = Thread(target=self.invoke)
-        thread.setDaemon(True)
+        # setDaemon() is deprecated since Python 2.6 and raises DeprecationWarning
+        thread.daemon = True
         thread.start()
-        print "REST API is now running in a separate daemon thread."        
+        logger.info('REST API is now running in a separate daemon thread on %s:%d',
+                    IP_ADDRESS, PORT)
 
     def invoke(self):
-        self.api = RESTAPI(self.atomspace)
+        self.api = RESTAPI(self.atomspace, config=self.config)
         self.api.run(host=IP_ADDRESS, port=PORT)

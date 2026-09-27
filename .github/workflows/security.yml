@@ -1,0 +1,160 @@
+name: Security
+
+# Static analysis, secret scanning and supply-chain checks.
+#
+# These run alongside CI on every push and pull request. They are
+# informational for the research code and blocking for the Python REST API
+# tree, which parses untrusted network input.
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Weekly, Monday 04:17 UTC. Catches newly published CVEs in dependencies
+    # that were pinned before the advisory existed.
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  codeql:
+    name: codeql
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [cpp, python]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-extended
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+
+  secret-scan:
+    name: secret-scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan the full history for committed credentials
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Do not fail the build on findings in the historical tree: there
+          # are pre-2016 commits that will never be rewritten. New findings
+          # are surfaced in the PR and must be fixed before merge.
+          FAIL_ON_LEAK: "false"
+      - name: Enforce a clean working tree scan (blocking)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+            | tar xz gitleaks
+          ./gitleaks detect --source . --no-git --no-banner --redact \
+            --config-path .gitleaks.toml
+      - name: Confirm no .env file is committed
+        run: |
+          if git ls-files --error-unmatch .env >/dev/null 2>&1; then
+            echo "::error::.env is tracked in git; it may contain credentials"
+            exit 1
+          fi
+
+  osv-scanner:
+    name: osv-scanner (dependency vulnerabilities)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan the pinned Python dependencies
+        uses: google/osv-scanner-action/scanner-only@v2
+        with:
+          scan-args: |-
+            -r requirements.lock.txt
+      - name: Scan the container image definition
+        uses: google/osv-scanner-action/scanner-only@v2
+        with:
+          scan-args: |-
+            -r Dockerfile
+
+  static-analysis:
+    name: static-analysis (semgrep)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep:1.99.0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the security ruleset
+        run: |
+          semgrep ci --config auto --metrics=off --error \
+            --exclude 'opencog/python/pln_old' \
+            --exclude 'opencog/embodiment' \
+            --severity ERROR --severity WARNING .
+      - name: Run the OWASP Python ruleset on the REST API
+        run: |
+          semgrep ci --config p/python --config p/flask --metrics=off \
+            --error opencog/python/web/api
+
+  dependency-review:
+    name: dependency-review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          # Block new vulnerabilities and any license that would break an
+          # AGPL-3.0-or-later redistribution.
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure
+
+  hardening:
+    name: container-hardening
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the Dockerfile and compose file
+        # hadolint catches the classic build-stage mistakes: running as root,
+        # ADD-from-URL, unpinned base images, apt-get without --no-install-recommends.
+        run: |
+          curl -sSL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 \
+            | tar xz hadolint
+          chmod +x hadolint
+          ./hadolint --ignore DL3008 --ignore DL3018 Dockerfile
+      - name: Fail if the Dockerfile fetches and executes remote code
+        run: |
+          # `ADD <url>` plus a following `chmod +x` is remote-code execution
+          # at image build time. The previous Dockerfile did exactly this
+          # with ocpkg.
+          if grep -nE '^\s*ADD\s+https?://' Dockerfile; then
+            echo "::error::Dockerfile fetches a remote script via ADD; \
+          use a pinned COPY, or download to a file and verify a checksum"
+            exit 1
+          fi
+      - name: Fail if the image runs as root by default
+        run: |
+          if ! grep -qE '^\s*USER\s+(?!root)' Dockerfile; then
+            echo "::error::Dockerfile does not switch away from root (missing USER)"
+            exit 1
+          fi
+      - name: Validate the compose file
+        run: docker compose config --quiet

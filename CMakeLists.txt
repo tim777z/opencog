@@ -494,6 +494,15 @@ ENDIF(HAVE_ATOMSPACE AND HAVE_GUILE AND HAVE_LINK_GRAMMAR)
 # ENDIF (LIBMEMCACHED_FOUND)
 
 # ===================================================================
+# Compile database, for clang-tidy and IDEs.
+#
+# `make lint-cpp` and the cpp-lint CI job need this to resolve include paths
+# and flags. It is cheap to produce and has no effect on the build itself.
+# ===================================================================
+SET(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL
+    "Emit compile_commands.json for clang-tidy / clangd")
+
+# ===================================================================
 # global includes
 
 # set confdir and datadir
@@ -568,6 +577,25 @@ IF (CXXTEST_FOUND)
 			COMMAND ${CMAKE_CTEST_COMMAND} --force-new-ctest-process $(ARGS)
 			COMMENT "Running tests..."
 		)
+	ENDIF (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+	# Emit an lcov report for an instrumented build. Requires the build to
+	# have been configured with -DCMAKE_BUILD_TYPE=Coverage (which sets
+	# -fprofile-arcs -ftest-coverage and links gcov) and lcov/genhtml on
+	# PATH. Scoped to UNIX because gcov output paths differ on Windows.
+	IF (CMAKE_BUILD_TYPE STREQUAL "Coverage" AND NOT WIN32)
+		# A Coverage build already routes each CxxTest through
+		# scripts/run_lcov.sh via the patched AddCxxTest macro, so the
+		# per-test coverage/*.info files exist once the tests have run.
+		# All this target adds is the merged report and the HTML summary.
+		ADD_CUSTOM_TARGET(coverage
+			DEPENDS tests
+			WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+			COMMAND ${PROJECT_SOURCE_DIR}/scripts/combine_lcov.sh
+			COMMENT "Generating the merged lcov report and HTML summary..."
+			VERBATIM
+		)
+	ELSEIF (CMAKE_BUILD_TYPE STREQUAL "Coverage")
+		MESSAGE(STATUS "The 'coverage' target needs a Coverage build on a Unix-like host.")
 	ENDIF (CMAKE_BUILD_TYPE STREQUAL "Coverage")
 	ADD_CUSTOM_TARGET(test_python
 		DEPENDS PythonModuleUTest PyEvalUTest PythonEvalUTest CogServerUTest

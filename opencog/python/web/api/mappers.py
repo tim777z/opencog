@@ -75,9 +75,9 @@ class ParseAttentionValue(object):
     @staticmethod
     def parse(data):
         av = data['attentionvalue']
-        sti = av['sti'] if 'sti' in av else None
-        lti = av['lti'] if 'lti' in av else None
-        vlti = av['vlti'] if 'vlti' in av else None
+        sti = av.get('sti')
+        lti = av.get('lti')
+        vlti = av.get('vlti')
 
         return sti, lti, vlti
 

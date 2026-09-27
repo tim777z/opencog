@@ -21,8 +21,13 @@ opencog/embodiment/DestinCudaAlt/bin/kerneltest
 # cmake
 CMakeCache.txt
 CMakeFiles
-Makefile
+# NOTE: the unanchored `Makefile` entry further down historically also matched
+# the hand-written developer Makefile at the repo root. `/Makefile` below
+# re-includes exactly that one file; nothing under build/ is re-included
+# because git never descends into an excluded directory.
+!/Makefile
 cmake_install.cmake
+compile_commands.json
 
 # ctest
 Testing/
@@ -86,6 +91,21 @@ opencog/embodiment/DestinCuda/DestinKernelJAVA_wrap.*
 *.pyc
 *.pyo
 
+# Python tooling caches and virtualenvs
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+htmlcov/
+.venv/
+venv/
+
+# Local environment: holds credentials, never commit
+.env
+.env.local
+
 # ~
 *.py~
 
@@ -100,7 +120,7 @@ CMakeLists.txt.user
 moc_*.cpp
 qrc_*.cpp
 ui_*.h
-Makefile
+# (the root developer Makefile is re-included near the top of this file)
 *-build-*
 
 ### Linux ###

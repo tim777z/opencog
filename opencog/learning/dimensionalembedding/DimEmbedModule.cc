@@ -108,7 +108,7 @@ const std::vector<double>& DimEmbedModule::getEmbedVector(Handle h,
     if (!isEmbedded(l)) {
         const char* tName = classserver().getTypeName(l).c_str();
         logger().error("No embedding exists for type %s", tName);
-        throw std::string("No embedding exists for type %s", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type %s", tName);
     }
 
     bool symmetric = classserver().isA(l,UNORDERED_LINK);
@@ -141,7 +141,7 @@ HandleSeq& DimEmbedModule::getPivots(Type l, bool fanin)
     if (!isEmbedded(l)) {
         const char* tName = classserver().getTypeName(l).c_str();
         logger().error("No embedding exists for type %s", tName);
-        throw std::string("No embedding exists for type %s", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type %s", tName);
     }
     bool symmetric = classserver().isA(l,UNORDERED_LINK);
     if (symmetric) {
@@ -162,7 +162,7 @@ HandleSeq DimEmbedModule::kNearestNeighbors(Handle h, Type l, int k, bool fanin)
     if (!isEmbedded(l)) {
         const char* tName = classserver().getTypeName(l).c_str();
         logger().error("No embedding exists for type %s", tName);
-        throw std::string("No embedding exists for type %s", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type %s", tName);
     }
     bool symmetric = classserver().isA(l,UNORDERED_LINK);
 
@@ -397,7 +397,7 @@ std::vector<double> DimEmbedModule::addNode(Handle h,
     if (!isEmbedded(linkType)) {
         const char* tName = classserver().getTypeName(linkType).c_str();
         logger().error("No embedding exists for type \"%s\"", tName);
-        throw std::string("No embedding exists for type \"%s\"", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type \"%s\"", tName);
     }
     bool symmetric = classserver().isA(linkType,UNORDERED_LINK);
     std::vector<double> newEmbedding (dimensionMap[linkType], 0.0);
@@ -458,7 +458,7 @@ void DimEmbedModule::removeNode(Handle h,
     if (!isEmbedded(linkType)) {
         const char* tName = classserver().getTypeName(linkType).c_str();
         logger().error("No embedding exists for type %s", tName);
-        throw std::string("No embedding exists for type %s", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type %s", tName);
     }
     bool symmetric = classserver().isA(linkType,UNORDERED_LINK);
     if (symmetric) {
@@ -492,7 +492,7 @@ void DimEmbedModule::addLink(Handle h,
     if (!isEmbedded(linkType)) {
         const char* tName = classserver().getTypeName(linkType).c_str();
         logger().error("No embedding exists for type %s", tName);
-        throw std::string("No embedding exists for type %s", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type %s", tName);
     }
     bool symmetric = classserver().isA(linkType, UNORDERED_LINK);
     if (symmetric) symAddLink(h, linkType);
@@ -683,14 +683,14 @@ ClusterSeq DimEmbedModule::kMeansCluster(Type l, int numClusters, int npass, boo
     if (!isEmbedded(l)) {
         const char* tName = classserver().getTypeName(l).c_str();
         logger().error("No embedding exists for type %s", tName);
-        throw std::string("No embedding exists for type %s", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type %s", tName);
     }
     int numDimensions=dimensionMap[l];
     const AtomEmbedding& aE = atomMaps[l];
     int numVectors=aE.size();
     if (numVectors<numClusters) {
         logger().error("Cannot make more clusters than there are nodes");
-        throw std::string("Cannot make more clusters than there are nodes");
+        throw InvalidParamException(TRACE_INFO, "Cannot make more clusters than there are nodes");
     }
     //create the required matrices for the clustering function (which
     //takes double** as an argument...)
@@ -945,7 +945,7 @@ Handle DimEmbedModule::blendNodes(Handle n1,
     if (!isEmbedded(l)) {
         const char* tName = classserver().getTypeName(l).c_str();
         logger().error("No embedding exists for type %s", tName);
-        throw std::string("No embedding exists for type %s", tName);
+        throw InvalidParamException(TRACE_INFO, "No embedding exists for type %s", tName);
     }
     const HandleSeq& pivots = getPivots(l);
     const unsigned int numDims = (unsigned int) dimensionMap[l];

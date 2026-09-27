@@ -1,0 +1,54 @@
+---
+# clang-format configuration for OpenCog.
+#
+# The C++ tree is a mix of Allman braces (the OpenCog house style, dominant in
+# opencog/server, opencog/spacetime and opencog/scm) and K&R braces (the
+# 2015 spatial/embodiment code). Running clang-format over the whole tree
+# today would produce a diff of tens of thousands of lines, which is not
+# reviewable and not what a security or bugfix change needs.
+#
+# Policy: this file is the target style for *new and modified* code. CI runs
+# `make format-check` on changed files only (see .github/workflows/ci.yml).
+# Whole-tree reformatting is a separate, deliberate change.
+#
+# Deriving from the OpenCog house style:
+#   IndentWidth 4, tabs for indentation, Allman braces, 100-column limit.
+Language: Cpp
+BasedOnStyle: LLVM
+
+AccessModifierOffset: -4
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AlignEscapedNewlines: Left
+AlignOperands: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes
+BreakBeforeBraces: Allman
+BreakConstructorInitializers: BeforeColon
+ColumnLimit: 100
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+Cpp11BracedListStyle: true
+DerivePointerAlignment: false
+FixNamespaceComments: false
+IncludeBlocks: Preserve
+IndentCaseLabels: true
+IndentPPDirectives: None
+IndentWidth: 4
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+NamespaceIndentation: None
+PointerAlignment: Right
+ReflowComments: true
+SortIncludes: false
+SpaceAfterCStyleCast: false
+SpaceBeforeParens: ControlStatements
+SpacesBeforeTrailingComments: 1
+Standard: Cpp11
+TabWidth: 4
+UseTab: ForIndentation
