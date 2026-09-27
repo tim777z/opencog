@@ -1,0 +1,35 @@
+title = "gitleaks configuration for OpenCog"
+# Extend the default rules rather than replacing them, so that new credential
+# patterns are picked up when gitleaks is upgraded.
+[extend]
+useDefault = true
+
+[allowlist]
+# Historical research code legitimately contains these; none of them is a
+# live credential.
+paths = [
+  '''tests/.*\.scm$''',
+  '''opencog/python/pln_old/.*''',
+  '''opencog/nlp/irc/.*''',
+  '''doc/.*''',
+]
+# Documentation and tests use obviously-fake placeholders.
+regexes = [
+  '''EXAMPLE_API_TOKEN''',
+  '''correct-horse-battery-staple''',
+  '''your[-_]?api[-_]?key''',
+  '''<[A-Za-z_]*TOKEN>''',
+]
+
+[[rules]]
+id = "opencog-cogserver-password"
+description = "A cogserver password in a config file"
+# lib/*.conf hold COGSERVER_PASSWORD entries. A real one must never be
+# committed; a placeholder must.
+regex = '''(?i)COGSERVER_PASSWORD\s*=\s*["']?([A-Za-z0-9!@#$%^&*_+-]{8,})["']?'''
+keywords = ["COGSERVER_PASSWORD"]
+# The default cogserver password shipped in opencog.conf is a well-known
+# literal used by every tutorial; allow exactly that, nothing else.
+allowlistRegexes = [
+  '''(?i)COGSERVER_PASSWORD\s*=\s*["']?(?:password|passw0rd|CHANGE_ME|changeme)["']?''',
+]

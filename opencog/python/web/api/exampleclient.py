@@ -7,10 +7,13 @@ From the wiki documentation located here:
 http://wiki.opencog.org/w/REST_API
 """
 
+from __future__ import print_function
+
 __author__ = 'Cosmo Harrigan'
 
-from requests import *
+import os
 import json
+from requests import *
 
 # Define the API Endpoint - replace 127.0.0.1 with the server IP address if
 # necessary
@@ -19,10 +22,16 @@ PORT = '5000'
 uri = 'http://' + IP_ADDRESS + ':' + PORT + '/api/v1.1/'
 headers = {'content-type': 'application/json'}
 
+# When OPENCOG_API_TOKEN is set on the server, every request must carry it.
+# Read it from the environment rather than hard-coding a credential.
+_api_token = os.environ.get('OPENCOG_API_TOKEN', '')
+if _api_token:
+    headers['Authorization'] = 'Bearer ' + _api_token
+
 # Pretty print function for displaying JSON request/response information
 def pprint(call, contents):
-    print '\n' + call.request.method + ' ' + call.request.path_url + ':'
-    print json.dumps(contents, indent=2)
+    print('\n' + call.request.method + ' ' + call.request.path_url + ':')
+    print(json.dumps(contents, indent=2))
 
 ####################################################################
 # Example POST and GET requests to create and read nodes and links #
@@ -116,9 +125,9 @@ GET /api/v1.1/atoms?name=giant_frog:
 '''
 
 # GET the newly created node by name and type
-type = post_result['type']
-#get_response = get(uri + 'atoms?name=' + name + '&type=' + type)
-get_response = get(uri + 'atoms', params={'name': name, 'type': type})
+atom_type = post_result['type']
+#get_response = get(uri + 'atoms?name=' + name + '&type=' + atom_type)
+get_response = get(uri + 'atoms', params={'name': name, 'type': atom_type})
 get_result = get_response.json()['result']['atoms'][0]
 pprint(get_response, get_result)
 '''

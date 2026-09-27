@@ -1,21 +1,42 @@
 __author__ = 'Cosmo Harrigan'
 
-from flask import abort, json, current_app, jsonify
+import logging
+
+from flask import abort, json, current_app, jsonify, request
 from flask.ext.restful import Resource, reqparse, marshal
 import opencog.cogserver
 from opencog.atomspace import Handle, Atom
 from mappers import *
-from flask.ext.restful.utils import cors
 from flask_restful_swagger import swagger
+from apisecurity import (
+    ApiSecurityConfig,
+    ValidationError,
+    authorize,
+    coerce_limit,
+    validate_jsonp_callback,
+)
+
+logger = logging.getLogger('opencog.restapi')
+
+#: Atom names arrive straight from the network.  OpenCog happily accepts long
+#: names, so cap them or a single POST can pin memory in the AtomSpace.
+MAX_ATOM_NAME_LENGTH = 4096
+MAX_OUTGOING_SET_SIZE = 65536
 
 # If the system doesn't have these dependencies installed, display a warning
 # but allow the API to load
 try:
     from graph_description import dot
 except ImportError:
-    print "DOT graph description format option not enabled in REST API. To " \
-          "enable, install the dependencies listed here:\n" \
-          "https://github.com/opencog/opencog/tree/master/opencog/python/graph_description#prerequisites"
+    logger.warning(
+        "DOT graph description format option not enabled in REST API. To "
+        "enable, install the dependencies listed here:\n"
+        "https://github.com/opencog/opencog/tree/master/opencog/python/graph_description#prerequisites")
+
+
+def _get_header(name):
+    """Header accessor in the shape :func:`apisecurity.authorize` expects."""
+    return request.headers.get(name)
 
 "AtomSpace management functionality"
 class AtomCollectionAPI(Resource):
@@ -23,6 +44,7 @@ class AtomCollectionAPI(Resource):
     @classmethod
     def new(cls, atomspace):
         cls.atomspace = atomspace
+        cls.config = None
         return cls
 
     def __init__(self):
@@ -53,9 +75,23 @@ class AtomCollectionAPI(Resource):
         super(AtomCollectionAPI, self).__init__()
         self.atomspace = opencog.cogserver.get_server_atomspace()
 
-    # Set CORS headers to allow cross-origin access
-    # (https://github.com/twilio/flask-restful/pull/131):
-    @cors.crossdomain(origin='*')
+    def _policy(self):
+        """Resolve the security policy, preferring the one bound by the app."""
+        config = getattr(AtomCollectionAPI, 'config', None)
+        if config is None:
+            config = ApiSecurityConfig.from_env()
+            AtomCollectionAPI.config = config
+        return config
+
+    def _authorize(self):
+        """Authenticate and origin-check an incoming request.
+
+        Raises AuthenticationError / OriginNotAllowed, which the application
+        turns into 401/403 responses.  Previously this endpoint was reachable
+        cross-origin by any web page, with ``Access-Control-Allow-Origin: *``.
+        """
+        return authorize(self._policy(), _get_header)
+
     @swagger.operation(
 	notes='''
 <p>URI: <code>atoms/[id]</code>
@@ -263,21 +299,31 @@ class AtomCollectionAPI(Resource):
 	]
     )
     def get(self, id=""):
-        retval = jsonify({'error':'Internal error'})
+        self._authorize()
         try:
-           retval = self._get(id=id)
-        except Exception,e:
-           retval = jsonify({'error':str(e)})
-        return retval
+            return self._get(id=id)
+        except (ValueError, TypeError, KeyError, IndexError, AttributeError) as exc:
+            # Log the detail, return a generic message.  Echoing str(exc)
+            # back to the caller disclosed internal library errors, file
+            # paths and object layouts to unauthenticated clients.
+            logger.warning('Bad request while reading atoms: %s', exc)
+            return jsonify({'error': 'Invalid request'}), 400
+
     def _get(self, id=""):
         """
         Returns a list of atoms matching the specified criteria
         """
 
         args = self.reqparse.parse_args()
-        type = args.get('type')
+        config = self._policy()
+        atom_type = args.get('type')
         name = args.get('name')
-        callback = args.get('callback')
+        # The JSONP callback is concatenated verbatim into a response served
+        # as application/javascript, so it is a reflected-XSS vector unless it
+        # is restricted to a bare JavaScript identifier.
+        callback = validate_jsonp_callback(args.get('callback'))
+        if name is not None and len(name) > MAX_ATOM_NAME_LENGTH:
+            raise ValidationError('name is too long')
 
         filter_by = args.get('filterby')
         sti_min = args.get('stimin')
@@ -320,16 +366,16 @@ class AtomCollectionAPI(Resource):
             # If there is not a valid filter type, proceed to select by type
             # or name
             if not valid_filter:
-                if type is None and name is None:
+                if atom_type is None and name is None:
                     atoms = self.atomspace.get_atoms_by_type(types.Atom)
                 elif name is None:
                     atoms = self.atomspace.get_atoms_by_type(
-                        types.__dict__.get(type))
+                        types.__dict__.get(atom_type))
                 else:
-                    if type is None:
-                        type = 'Node'
+                    if atom_type is None:
+                        atom_type = 'Node'
                     atoms = self.atomspace.get_atoms_by_name(
-                        t=types.__dict__.get(type), name=name)
+                        t=types.__dict__.get(atom_type), name=name)
 
             # Optionally, filter by TruthValue
             if tv_strength_min is not None:
@@ -352,10 +398,13 @@ class AtomCollectionAPI(Resource):
         if include_outgoing in ['True', 'true', '1']:
             atoms = self.atomspace.include_outgoing(atoms)
 
-        # Optionally, limit number of atoms returned
-        if limit is not None:
-            if len(atoms) > limit:
-                atoms = atoms[0:limit]
+        # Optionally, limit number of atoms returned.
+        # An unbounded dump of the whole AtomSpace is a trivially reachable
+        # memory-exhaustion DoS, so always cap the page size -- a missing
+        # limit now yields config.default_limit rather than "everything".
+        limit = coerce_limit(limit, config.max_limit, config.default_limit)
+        if len(atoms) > limit:
+            atoms = atoms[0:limit]
 
         # The default is to return the atom set as JSON atoms. Optionally, a
         # DOT return format is also supported
@@ -363,17 +412,16 @@ class AtomCollectionAPI(Resource):
             atom_list = AtomListResponse(atoms)
             json_data = {'result': atom_list.format()}
 
-            # if callback function supplied, pad the JSON data (i.e. JSONP):
+            # if callback function supplied, pad the JSON data (i.e. JSONP).
+            # `callback` has already been validated as a bare identifier.
             if callback is not None:
-                response = str(callback) + '(' + json.dumps(json_data) + ');'
+                response = callback + '(' + json.dumps(json_data) + ');'
                 return current_app.response_class(
                     response, mimetype='application/javascript')
-            else:
-                return current_app.response_class(
-                    json.dumps(json_data), mimetype='application/json')
-        else:
-            dot_output = dot.get_dot_representation(atoms)
-            return jsonify({'result': dot_output})
+            return current_app.response_class(
+                json.dumps(json_data), mimetype='application/json')
+        dot_output = dot.get_dot_representation(atoms)
+        return jsonify({'result': dot_output})
 
     @swagger.operation(
 	notes='''
@@ -505,34 +553,53 @@ the atom. Example:
         """
         Creates a new atom. If the atom already exists, it updates the atom.
         """
+        self._authorize()
 
         # Prepare the atom data and validate it
-        data = reqparse.request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise ValidationError(
+                'Invalid request: a JSON object body is required')
 
         if 'type' in data:
-            if data['type'] in types.__dict__:
-                type = types.__dict__.get(data['type'])
-            else:
-                abort(400, 'Invalid request: type \'' + type + '\' is not a '
-                                                               'valid type')
+            requested_type = data['type']
+            if not isinstance(requested_type, str) \
+                    or requested_type not in types.__dict__:
+                # The old code interpolated an unbound local `type` here,
+                # turning a 400 into a 500 NameError.
+                raise ValidationError(
+                    'Invalid request: type is not a valid type')
+            atom_type = types.__dict__.get(requested_type)
         else:
-            abort(400, 'Invalid request: required parameter type is missing')
+            raise ValidationError(
+                'Invalid request: required parameter type is missing')
 
         # TruthValue
         tv = ParseTruthValue.parse(data)
 
         # Outgoing set
+        outgoing = None
         if 'outgoing' in data:
-            if len(data['outgoing']) > 0:
-                outgoing = [Handle(h) for h in data['outgoing']]
-        else:
-            outgoing = None
+            raw_outgoing = data['outgoing']
+            if not isinstance(raw_outgoing, (list, tuple)):
+                raise ValidationError('outgoing must be a list of handles')
+            if len(raw_outgoing) > MAX_OUTGOING_SET_SIZE:
+                raise ValidationError('outgoing set is too large')
+            try:
+                outgoing = [Handle(h) for h in raw_outgoing]
+            except (TypeError, ValueError):
+                raise ValidationError('outgoing must be a list of handles')
 
         # Name
-        name = data['name'] if 'name' in data else None
+        name = data.get('name')
+        if name is not None:
+            if not isinstance(name, str):
+                raise ValidationError('name must be a string')
+            if len(name) > MAX_ATOM_NAME_LENGTH:
+                raise ValidationError('name is too long')
 
         # Nodes must have names
-        if is_a(type, types.Node):
+        if is_a(atom_type, types.Node):
             if name is None:
                 abort(400, 'Invalid request: node type specified and required '
                            'parameter name is missing')
@@ -543,7 +610,8 @@ the atom. Example:
                            'link types')
 
         try:
-            atom = self.atomspace.add(t=type, name=name, tv=tv, out=outgoing)
+            atom = self.atomspace.add(t=atom_type, name=name, tv=tv,
+                                    out=outgoing)
         except TypeError:
             abort(500, 'Error while processing your request. Check your '
                        'parameters.')
@@ -670,12 +738,16 @@ containing the atom.
         """
         Updates the AttentionValue (STI, LTI, VLTI) or TruthValue of an atom
         """
+        self._authorize()
 
         if Handle(id) not in self.atomspace:
             abort(404, 'Handle not found')
 
         # Prepare the atom data
-        data = reqparse.request.get_json()
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise ValidationError(
+                'Invalid request: a JSON object body is required')
 
         if 'truthvalue' not in data and 'attentionvalue' not in data:
             abort(400, 'Invalid request: you must include a truthvalue or '
@@ -728,6 +800,7 @@ Returns a JSON representation of the result, indicating success or failure.
         """
         Removes an atom from the AtomSpace
         """
+        self._authorize()
 
         if Handle(id) not in self.atomspace:
             abort(404, 'Handle not found')

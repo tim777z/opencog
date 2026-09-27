@@ -1,7 +1,57 @@
-bin*/*
-build*/*
+# Build context hygiene.
+#
+# Anything listed here is neither sent to the daemon nor available to a
+# build step. Credentials and local state must never end up in a layer.
 .git
-tags/*
-.pyc
-*~
+.github
+.gitignore
+.env
+.env.local
+*.env
+!.env.example
 
+# Build outputs
+build
+build-*
+bin
+bin-debug
+out
+cmake-build-*
+CMakeCache.txt
+CMakeFiles
+cmake_install.cmake
+compile_commands.json
+Testing
+CPackConfig.cmake
+CPackSourceConfig.cmake
+
+# Python caches and virtualenvs
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.coverage
+coverage.xml
+htmlcov
+.venv
+venv
+
+# Coverage and profiling artefacts
+*.gcda
+*.gcno
+*.gcov
+*.info
+lcov.info
+
+# Editor and OS noise
+.idea
+.vscode
+*.swp
+*~
+.DS_Store
+
+# Documentation sources that are not needed to build
+doc/html
+doc/latex

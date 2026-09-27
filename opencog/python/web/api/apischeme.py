@@ -1,11 +1,27 @@
 __author__ = 'Cosmo Harrigan'
 
-from flask import abort, jsonify
+import logging
+
+from flask import abort, jsonify, request
 from flask.ext.restful import Resource, reqparse
-from opencog.scheme_wrapper import scheme_eval, __init__
+from opencog.scheme_wrapper import scheme_eval
 from flask_restful_swagger import swagger
 
+from apisecurity import (
+    ApiSecurityConfig,
+    ValidationError,
+    authorize,
+    validate_command,
+)
+
+logger = logging.getLogger('opencog.restapi')
+
 COGSERVER_PORT = 17001
+
+
+def _get_header(name):
+    """Header accessor in the shape :func:`apisecurity.authorize` expects."""
+    return request.headers.get(name)
 
 
 class SchemeAPI(Resource):
@@ -18,6 +34,7 @@ class SchemeAPI(Resource):
     @classmethod
     def new(cls, atomspace):
         cls.atomspace = atomspace
+        cls.config = None
         return cls
 
     def __init__(self):
@@ -25,6 +42,14 @@ class SchemeAPI(Resource):
         self.reqparse.add_argument('command', type=str, location='args')
 
         super(SchemeAPI, self).__init__()
+
+    def _policy(self):
+        """Resolve the security policy, preferring the one bound by the app."""
+        config = getattr(SchemeAPI, 'config', None)
+        if config is None:
+            config = ApiSecurityConfig.from_env()
+            SchemeAPI.config = config
+        return config
 
     @swagger.operation(
 	notes='''
@@ -74,13 +99,25 @@ cause side-effects.''',
         """
         Send a command to the Scheme interpreter
         """
+        config = self._policy()
+        # /scheme evaluates arbitrary Scheme, which is arbitrary code
+        # execution inside the cogserver.  Authenticate and origin-check
+        # before touching the body.
+        authorize(config, _get_header)
 
-        # Validate, parse and send the command
-        data = reqparse.request.get_json()
-        if 'command' in data:
-            response = scheme_eval(self.atomspace, data['command'])
-        else:
-            abort(400,
-                  'Invalid request: required parameter command is missing')
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            raise ValidationError(
+                'Invalid request: a JSON object body is required')
+
+        command = validate_command(data.get('command'),
+                                   config.max_command_length)
+        try:
+            response = scheme_eval(self.atomspace, command)
+        except Exception:
+            # Log the detail for the operator; return a generic message so
+            # that interpreter internals are not disclosed to the caller.
+            logger.exception('Scheme evaluation failed')
+            abort(500, 'Error evaluating the Scheme command')
 
         return jsonify({'response': response})

@@ -1,0 +1,204 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opencog"
+version = "0.1.4"
+description = "The Open Cognition Framework: a framework for building AI and AGI systems"
+readme = "README.md"
+requires-python = ">=2.7"
+license = { text = "AGPL-3.0-or-later" }
+authors = [{ name = "OpenCog Foundation", email = "opencog@googlegroups.com" }]
+keywords = ["ai", "agi", "atomspace", "cognition", "knowledge-representation"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 2.7",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# The C++ tree is built with CMake, not setuptools; this file exists to give
+# the project a single machine-readable manifest, to pin the Python
+# toolchain, and to configure the test/lint entry points. Runtime Python
+# dependencies are listed in requirements.txt and pinned in
+# requirements.lock.txt.
+dependencies = []
+
+[project.optional-dependencies]
+# Everything needed to run the dependency-free test suite and the linters.
+dev = [
+  "pytest>=7.0",
+  "coverage>=7.0",
+  "ruff>=0.5",
+]
+# Optional REST API stack. Only needed to import opencog/python/web/api.
+restapi = [
+  "Flask>=2.2,<4",
+  "flask-restful>=0.3.9",
+  "flask-restful-swagger>=0.30",
+  "flask-cors>=3.0",
+]
+
+[project.urls]
+Homepage = "http://opencog.org"
+Source = "https://github.com/opencog/opencog"
+Issues = "https://github.com/opencog/opencog/issues"
+
+[tool.setuptools]
+# The Python code in this repository is installed by CMake into
+# $(DATADIR)/python, not by pip. Nothing to discover here.
+py-modules = []
+
+# ----------------------------------------------------------------------
+# Test configuration
+# ----------------------------------------------------------------------
+# The default testpaths deliberately point at tests/python/pytest, which
+# needs nothing but the standard library. The legacy nosetests suites under
+# tests/python/restapi and tests/python/blending_test require the compiled
+# AtomSpace/Cython bindings and are still run by `ctest` after a C++ build;
+# see CONTRIBUTING.md.
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests/python/pytest"]
+addopts = "-ra --strict-markers"
+markers = [
+  "slow: long-running tests, deselect with '-m \"not slow\"'",
+]
+filterwarnings = ["error::DeprecationWarning:opencog.*"]
+
+[tool.coverage.run]
+branch = true
+# Measure the packages the dependency-free suite can import. The wider
+# opencog/python/utility package still holds Python 2 sources that
+# coverage.py cannot parse on Python 3; they are omitted rather than allowed
+# to abort the report. Widen the scope as subtrees migrate.
+source = [
+  "opencog/python/web/api",
+  "opencog/python/utility",
+]
+omit = [
+  "*/tests/*",
+  "*/__pycache__/*",
+  # Package markers and a stub with no behaviour.
+  "*/__init__.py",
+  "opencog/python/utility/generic.py",
+  # Python 2 only: `print` statements, `basestring`, `has_key`.
+  "opencog/python/utility/evolutionary.py",
+  "opencog/python/utility/functions.py",
+  "opencog/python/utility/tree.py",
+  "opencog/python/utility/util.py",
+  "opencog/python/utility/load_scm_file.py",
+  "opencog/python/utility/enum.py",
+  "opencog/python/utility/numeric/*",
+  # Require Flask and the compiled AtomSpace/Cython bindings, so they cannot
+  # be measured without a full C++ build. They are covered instead by the
+  # nosetests suites in tests/python/restapi and tests/python/blending_test,
+  # which `make test-cpp` runs under ctest.
+  "opencog/python/web/api/apiatomcollection.py",
+  "opencog/python/web/api/apimain.py",
+  "opencog/python/web/api/apischeme.py",
+  "opencog/python/web/api/apishell.py",
+  "opencog/python/web/api/apitypes.py",
+  "opencog/python/web/api/exampleclient.py",
+  "opencog/python/web/api/mappers.py",
+  "opencog/python/web/api/restapi.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+# Enforced over the measurable surface only (see omit above). Widen the
+# target as more subtrees gain dependency-free tests.
+fail_under = 80
+exclude_lines = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if __name__ == .__main__.:",
+]
+
+# ----------------------------------------------------------------------
+# Linting / formatting
+# ----------------------------------------------------------------------
+# The Python tree is mid-migration from Python 2 to Python 3, so the target
+# version is pinned and the legacy-only trees are excluded. New code is
+# expected to be Python 3 clean (see CONTRIBUTING.md).
+[tool.ruff]
+line-length = 100
+target-version = "py37"
+# Scope note: `opencog/python/web/api` and `tests/python/pytest` are the two
+# trees that are Python 3 clean today. The rest of `opencog/python` still
+# uses Python 2 syntax (print statements, `basestring`, `has_key`) and
+# cannot be parsed by a modern linter at all, so including it here would
+# mean a permanently red gate nobody trusts. Widen `include` as each
+# subtree is migrated; see the migration table in CONTRIBUTING.md.
+include = ["opencog/python/web/api/*.py", "tests/python/pytest/*.py"]
+extend-exclude = [
+  "build",
+  "lib/json_spirit",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",     # pycodestyle errors
+  "F",     # pyflakes
+  "W",     # pycodestyle warnings
+  "B",     # flake8-bugbear
+  "A",     # flake8-builtins
+  "C4",    # flake8-comprehensions
+  "PIE",   # flake8-pie
+  "PT",    # flake8-pytest-style
+  "RET",   # flake8-return
+  "SIM",   # flake8-simplify
+  "S",     # flake8-bandit
+  "RUF",   # ruff-specific
+]
+# Deliberately NOT enabled:
+#   UP (pyupgrade) - the cogserver still runs this code on Python 2.7, so
+#     "upgrade this to 3.x" is the wrong instruction, not a helpful one.
+#   I  (isort)    - would require reordering the cogserver's PYTHONPATH-style
+#     flat imports and the generated swagger blocks; churn without value.
+ignore = [
+  # This codebase indents generated swagger/Scheme blocks with tabs by
+  # long-standing convention. Converting them is a separate mechanical change.
+  "E101", "W191",
+  # Line length is enforced by the formatter, not the linter, so that long
+  # docstrings and URLs do not force artificial wrapping.
+  "E501",
+  # raise ... from err is a Python 3 idiom; this tree must import on 2.7.
+  "B904",
+  # Atom type names (types.Atom, data['type']) shadow builtins by design.
+  "A002", "A003",
+  # assertFalse/assertTrue read better than assertEqual(x, False).
+  "PT018",
+  # Legacy `paramType`/tuple unpacking style in the resource definitions.
+  "PT006",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The REST API resources compose themselves with `from mappers import *`
+# and friends, which is how the cogserver loads them from
+# PYTHON_EXTENSION_DIRS. Keep the star imports.
+"opencog/python/web/api/*" = ["F401", "F403", "F405"]
+# Tests may use asserts and intentionally exercise dangerous settings such as
+# binding to 0.0.0.0 in order to assert that the guard rejects them.
+"tests/**" = [
+  "S101", "S105", "S106", "S104", "S311", "B011",
+  "RUF001", "RUF002", "RUF003",
+]
+"**/__init__.py" = ["F401"]
+# The cogserver config file is data, not a secret store.
+"opencog/python/web/api/apisecurity.py" = ["S105", "S106"]
+# urlopen() is guarded by an explicit scheme/host allow-list in
+# _validate_remote_url immediately above the call site; the S310 heuristic
+# cannot see across that function boundary.
+"opencog/python/utility/csv_dataset_parser.py" = ["S310"]
+
+[tool.ruff.lint.flake8-bandit]
+# Note: B310 (urlopen) is not reachable from the files linted here. The one
+# urlopen call in the tree lives in csv_dataset_parser._open_source, which
+# calls _validate_remote_url first; that allow-list is the security control
+# and B310 cannot see across the function boundary. It is disabled per-file
+# in the ignore list below so the intent is recorded rather than hidden.
+

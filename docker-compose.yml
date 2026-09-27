@@ -1,5 +1,57 @@
+# Self-contained OpenCog environment.
+#
+#   docker compose build                 # build cogutils + atomspace + opencog
+#   docker compose run --rm test         # run every test suite
+#   docker compose run --rm cogserver    # interactive shell in the image
+#
+# Both sibling repositories are built from source at pinned refs inside the
+# image (see Dockerfile), so `docker compose up` needs no host-side state:
+# no pre-existing AtomSpace, no manual `sudo make install` in three
+# directories. That was the reason the previous compose file could not
+# reproduce a build on a clean machine.
+
 services:
   opencog:
-    build: .
-    volumes:
-      - .:/app
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        # Pin these to commit SHAs for a byte-reproducible image. The
+        # defaults track master so that a fresh clone builds without
+        # editing anything; see the "Reproducible Build" section of README.md.
+        COGUTIL_REPO: ${COGUTIL_REPO:-https://github.com/opencog/cogutils.git}
+        COGUTIL_REF: ${COGUTIL_REF:-master}
+        ATOMSPACE_REPO: ${ATOMSPACE_REPO:-https://github.com/opencog/atomspace.git}
+        ATOMSPACE_REF: ${ATOMSPACE_REF:-master}
+    image: opencog:dev
+    # cogserver shell, cogserver python shell, REST API, embodiment/Unity
+    # ports. Bound to loopback: the REST API can execute Scheme, so it must
+    # never be published to 0.0.0.0 from a compose file.
+    ports:
+      - "127.0.0.1:17001:17001"
+      - "127.0.0.1:18001:18001"
+      - "127.0.0.1:5000:5000"
+    environment:
+      # The REST API refuses to start on a non-loopback bind without a token.
+      # Supply one from .env (see .env.example) if you change the port
+      # publishing above.
+      OPENCOG_API_TOKEN: ${OPENCOG_API_TOKEN:-}
+      OPENCOG_API_BIND_HOST: ${OPENCOG_API_BIND_HOST:-0.0.0.0}
+      OPENCOG_API_ALLOWED_ORIGINS: ${OPENCOG_API_ALLOWED_ORIGINS:-}
+      OPENCOG_LOG_LEVEL: ${OPENCOG_LOG_LEVEL:-INFO}
+    # No `privileged`, no `network_mode: host`, no docker socket mount.
+    read_only: false
+    command: ["bash"]
+
+  # `docker compose run --rm test` -> the full suite, from a clean container.
+  test:
+    extends: opencog
+    profiles: ["test"]
+    command: ["make", "test"]
+
+  # `docker compose run --rm cogserver` -> start the server.
+  cogserver:
+    extends: opencog
+    profiles: ["serve"]
+    command: ["/usr/local/bin/cogserver", "-c", "/usr/src/opencog/lib/opencog.conf"]

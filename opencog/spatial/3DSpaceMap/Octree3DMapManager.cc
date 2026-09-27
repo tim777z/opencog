@@ -94,35 +94,6 @@ Octree3DMapManager::Octree3DMapManager(std::string _mapName,int _xMin, int _yMin
     enable_BlockEntity_Segmentation = false;
 
 //            config().get_bool("ENABLE_BLOCKENTITY_SEGMENTATION");
-
-    int i = 0;
-    i ++;
-
-
-
-    /*
-#ifdef HAVE_ZMQ
-    // set up the zmq socket to communicate with the learning server
-    this->zmqLSContext = new zmq::context_t(1);
-
-    this->socketLSFromLS = new zmq::socket_t(*zmqLSContext, ZMQ_PULL);
-    this->socketSendToLS = new zmq::socket_t(*zmqLSContext, ZMQ_PUSH);
-
-    this->toLSIP = config().get("LEARNING_SERVER_PULL_IP");
-    this->toLSPort = config().get("LEARNING_SERVER_PULL_PORT");
-
-    this->fromLSIP = config().get("LEARNING_SERVER_PUSH_IP");
-    this->fromLSPort = config().get("LEARNING_SERVER_PUSH_PORT");
-
-    string toLSAddress = "tcp://" + this->toLSIP + ":" + this->toLSPort;
-    string fromLSAddress = "tcp://" + this->fromLSIP + ":" + this->fromLSPort;
-
-    this->socketSendToLS->connect(toLSAddress.c_str());
-    this->socketLSFromLS->connect(fromLSAddress.c_str());
-#endif // HAVE_ZMQ
-
-    this->enableStaticsMapLearning = config().get_bool("ENABLE_STATICS_MAP_LEARNING");
-   */
 }
 
 Octree3DMapManager::~Octree3DMapManager()

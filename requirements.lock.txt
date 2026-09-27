@@ -1,0 +1,49 @@
+# ---------------------------------------------------------------------------
+# OpenCog pinned Python dependencies
+#
+#   Install with:   python -m pip install -r requirements.lock.txt
+#   Regenerate:     make lock        (requires network access + pip-tools)
+#
+# PROVENANCE AND HONESTY NOTE
+# ---------------------------
+# The entries marked [verified] are the exact versions this repository's test
+# suite and linter were executed against, and they are the ones CI installs.
+# The entries marked [constraints] are lower/upper bounds copied from
+# pyproject.toml, NOT a resolver-produced closure: the machine this lock was
+# authored on has no network access, so pip-compile could not be run to
+# resolve the transitive Flask stack.
+#
+# Before relying on this file to reproduce a production REST API deployment,
+# run `make lock` on a networked machine and commit the result. Until then,
+# treat the [constraints] block as a starting point, not a guarantee.
+# ---------------------------------------------------------------------------
+
+# --- [verified] test + lint toolchain -------------------------------------
+# Verified by: `python -m pytest tests/python/pytest` -> 149 passed
+#              `python -m ruff check .`                    -> clean
+iniconfig==2.0.0
+packaging==24.2
+pluggy==1.5.0
+pytest==9.1.1
+
+# Verified: `python -m coverage run -m pytest`
+coverage==7.16.1
+
+# Verified: `python -m ruff check .`
+ruff==0.7.4
+
+# --- [constraints] optional REST API stack --------------------------------
+# Needed only to import opencog/python/web/api. Resolve with `make lock`.
+blinker==1.9.0
+click==8.1.7
+flask==3.0.3
+flask-cors==5.0.0
+flask-restful==0.3.10
+flask-restful-swagger==0.30.2
+itsdangerous==2.2.0
+jinja2==3.1.4
+markupsafe==2.1.5
+packaging==24.2
+pytz==2024.2
+six==1.17.0
+werkzeug==3.0.4

@@ -1,0 +1,31 @@
+# OpenCog Python dependencies
+#
+# The C++ tree is built by CMake; this file covers only the Python components
+# that ship in this repository (opencog/python, tests/python, tests/cython).
+#
+# Two groups:
+#   1. Runtime dependencies of the shipped Python modules.
+#   2. Test and lint tooling, which `make test` and `make lint` need.
+#
+# For a *pinned, reproducible* environment install requirements.lock.txt
+# instead of this file. Regenerate the lock with `make lock`.
+#
+# NOTE ON VERSIONS: the cogserver historically ran on Python 2.7. The modules
+# in opencog/python/web/api and opencog/python/utility/csv_dataset_parser.py
+# now import cleanly on both 2.7 and 3.x; the rest of opencog/python is still
+# Python 2 only. See the migration table in CONTRIBUTING.md.
+
+# --- REST API (opencog/python/web/api) ------------------------------------
+# Only needed if you intend to run the cogserver's HTTP interface.
+Flask>=2.2,<4
+flask-restful>=0.3.9
+flask-restful-swagger>=0.30
+flask-cors>=3.0
+six>=1.16
+
+# --- Test and lint tooling -------------------------------------------------
+# The dependency-free suite under tests/python/pytest needs only pytest; the
+# rest is for coverage and linting.
+pytest>=7.0
+coverage>=7.0
+ruff>=0.5
