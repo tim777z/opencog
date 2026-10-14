@@ -66,7 +66,7 @@ jobs:
           FAIL_ON_LEAK: "false"
       - name: Enforce a clean working tree scan (blocking)
         run: |
-          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
+          curl -sSfL --retry 3 --retry-delay 2 https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz \
             | tar xz gitleaks
           ./gitleaks detect --source . --no-git --no-banner --redact \
             --config-path .gitleaks.toml
@@ -102,14 +102,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run the security ruleset
         run: |
-          semgrep ci --config auto --metrics=off --error \
+          # semgrep >=1.9x removed `--error` and `--severity` from `semgrep ci`, and
+          # it no longer accepts a positional target. Severity now lives in rule
+          # config; `semgrep ci` exits non-zero when blocking findings exist.
+          semgrep ci --config auto --metrics=off \
             --exclude 'opencog/python/pln_old' \
-            --exclude 'opencog/embodiment' \
-            --severity ERROR --severity WARNING .
+            --exclude 'opencog/embodiment'
       - name: Run the OWASP Python ruleset on the REST API
         run: |
+          # `--error` is gone, and the path must be a pattern rather than a positional.
           semgrep ci --config p/python --config p/flask --metrics=off \
-            --error opencog/python/web/api
+            --include 'opencog/python/web/api/**'
 
   dependency-review:
     name: dependency-review
@@ -136,7 +139,7 @@ jobs:
         # hadolint catches the classic build-stage mistakes: running as root,
         # ADD-from-URL, unpinned base images, apt-get without --no-install-recommends.
         run: |
-          curl -sSL https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 \
+          curl -sSfL --retry 3 --retry-delay 2 https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 \
             | tar xz hadolint
           chmod +x hadolint
           ./hadolint --ignore DL3008 --ignore DL3018 Dockerfile
@@ -158,3 +161,4 @@ jobs:
           fi
       - name: Validate the compose file
         run: docker compose config --quiet
+
