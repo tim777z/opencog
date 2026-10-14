@@ -83,12 +83,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Scan the pinned Python dependencies
-        uses: google/osv-scanner-action/scanner-only@v2.7.0
+        uses: google/osv-scanner-action@v2.7.0
         with:
           scan-args: |-
             -r requirements.lock.txt
       - name: Scan the container image definition
-        uses: google/osv-scanner-action/scanner-only@v2.7.0
+        uses: google/osv-scanner-action@v2.7.0
         with:
           scan-args: |-
             -r Dockerfile
