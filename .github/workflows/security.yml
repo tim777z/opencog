@@ -83,12 +83,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Scan the pinned Python dependencies
-        uses: google/osv-scanner-action@v2.7.0
+        uses: google/osv-scanner-action/scanner-only@v2
         with:
           scan-args: |-
             -r requirements.lock.txt
       - name: Scan the container image definition
-        uses: google/osv-scanner-action@v2.7.0
+        uses: google/osv-scanner-action/scanner-only@v2
         with:
           scan-args: |-
             -r Dockerfile
@@ -138,15 +138,11 @@ jobs:
       - name: Lint the Dockerfile and compose file
         # hadolint catches the classic build-stage mistakes: running as root,
         # ADD-from-URL, unpinned base images, apt-get without --no-install-recommends.
-        #
-        # This used to `curl | tar xz` a pinned release binary. The runner received
-        # a non-gzip body in ~250ms despite HTTP 200 (`curl: (23)`, `gzip: stdin:
-        # not in gzip format`), because `curl -s` silently pipes an error page into
-        # tar. The maintained action drops the network fetch from the job entirely.
-        uses: hadolint/hadolint-action@v3.5.0
-        with:
-          dockerfile: Dockerfile
-          ignore: DL3008,DL3018
+        run: |
+          curl -sSfL --retry 3 --retry-delay 2 https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64 \
+            | tar xz hadolint
+          chmod +x hadolint
+          ./hadolint --ignore DL3008 --ignore DL3018 Dockerfile
       - name: Fail if the Dockerfile fetches and executes remote code
         run: |
           # `ADD <url>` plus a following `chmod +x` is remote-code execution
