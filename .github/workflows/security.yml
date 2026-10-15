@@ -111,8 +111,10 @@ jobs:
             --exclude 'opencog/embodiment'
       - name: Run the OWASP Python ruleset on the REST API
         run: |
+          # `--error` is gone here too, and a bare path is no longer a valid target -
+          # it has to be a pattern. Verified against semgrep/semgrep:1.99.0:
           semgrep ci --config p/python --config p/flask --metrics=off \
-            --error opencog/python/web/api
+            --include 'opencog/python/web/api/**'
 
   dependency-review:
     name: dependency-review
