@@ -102,14 +102,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run the security ruleset
         run: |
-          semgrep ci --config auto --metrics=off --error \
+          # semgrep >=1.9x removed `--error` and `--severity` from `semgrep ci`, and it
+          # no longer accepts a positional target. Verified against the pinned image
+          # (semgrep/semgrep:1.99.0): all three were rejected. Severity now lives in
+          # rule config and `semgrep ci` exits non-zero on blocking findings.
+          semgrep ci --config auto --metrics=off \
             --exclude 'opencog/python/pln_old' \
-            --exclude 'opencog/embodiment' \
-            --severity ERROR --severity WARNING .
+            --exclude 'opencog/embodiment'
       - name: Run the OWASP Python ruleset on the REST API
         run: |
+          # `--error` is gone here too, and a bare path is no longer a valid target -
+          # it has to be a pattern. Verified against semgrep/semgrep:1.99.0:
           semgrep ci --config p/python --config p/flask --metrics=off \
-            --error opencog/python/web/api
+            --include 'opencog/python/web/api/**'
 
   dependency-review:
     name: dependency-review
