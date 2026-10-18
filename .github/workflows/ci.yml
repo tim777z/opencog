@@ -45,11 +45,11 @@ jobs:
         run: python -m pytest --collect-only -q
       - name: Run the test suite
         run: python -m pytest -v --tb=short
-      - name: Upload coverage
+      - name: Run tests with coverage and enforce threshold
         if: matrix.python-version == '3.11'
         run: |
           python -m coverage run -m pytest
-          python -m coverage report
+          python -m coverage report --fail-under=80
           python -m coverage xml
       - uses: actions/upload-artifact@v4
         if: matrix.python-version == '3.11'
@@ -125,7 +125,6 @@ jobs:
           xargs -a cpp.txt -r clang-tidy -p build --quiet
       - name: clang-format check on changed C++ files
         if: steps.changed.outputs.count != '0'
-        continue-on-error: true
         run: xargs -a cpp.txt -r clang-format-14 --dry-run --Werror --style=file
 
   # -------------------------------------------------------------------

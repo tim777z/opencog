@@ -87,9 +87,9 @@ test-cpp: build ## Run the CxxTest suites via ctest
 	cd $(BUILD_DIR) && ctest --output-on-failure
 
 .PHONY: coverage
-coverage: ## Run the Python suite with coverage and print the report
+coverage: ## Run the Python suite with coverage and print the report (enforces 80% threshold)
 	$(PYTHON) -m coverage run -m pytest
-	$(PYTHON) -m coverage report
+	$(PYTHON) -m coverage report --fail-under=80
 	$(PYTHON) -m coverage html -d $(BUILD_DIR)/coverage-python
 
 .PHONY: coverage-cpp

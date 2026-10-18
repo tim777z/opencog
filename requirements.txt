@@ -19,7 +19,7 @@
 # Only needed if you intend to run the cogserver's HTTP interface.
 Flask>=2.2,<4
 flask-restful>=0.3.9
-flask-restful-swagger>=0.30
+flask-restful-swagger>=0.20,<0.21
 flask-cors>=3.0
 six>=1.16
 
