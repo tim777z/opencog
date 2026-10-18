@@ -3,8 +3,10 @@ __author__ = 'Cosmo Harrigan'
 import json
 import logging
 import os
+import uuid
+from functools import wraps
 
-from flask import Flask, request
+from flask import Flask, request, g
 from flask.ext.restful import Api
 from flask.ext.cors import CORS
 
@@ -22,8 +24,43 @@ from apisecurity import (
     is_origin_allowed,
 )
 from flask_restful_swagger import swagger
+from health import register_health_endpoint
 
 logger = logging.getLogger('opencog.restapi')
+
+# Structured logging helper
+def _log_structured(level, message, **fields):
+    """Log a message with structured fields for machine parsing."""
+    extra = {
+        'request_id': getattr(g, 'request_id', None),
+        'route': getattr(g, 'route', None),
+        'method': getattr(g, 'method', None),
+        'status_code': getattr(g, 'status_code', None),
+    }
+    extra.update(fields)
+    # Filter out None values
+    extra = {k: v for k, v in extra.items() if v is not None}
+    logger.log(level, message, extra=extra)
+
+
+def _request_id_middleware(app):
+    """Add request_id to each request for tracing."""
+    @app.before_request
+    def _inject_request_id():
+        g.request_id = request.headers.get('X-Request-ID') or str(uuid.uuid4())[:8]
+        g.route = request.path
+        g.method = request.method
+        _log_structured(logging.INFO, 'Request started')
+
+    @app.after_request
+    def _log_response(response):
+        g.status_code = response.status_code
+        _log_structured(logging.INFO, 'Request completed',
+                        status_code=response.status_code,
+                        content_length=response.content_length)
+        # Add request ID to response headers for client-side tracing
+        response.headers['X-Request-ID'] = g.request_id
+        return response
 
 
 class RESTAPI(object):
@@ -103,6 +140,10 @@ class RESTAPI(object):
 
         self.app.after_request(self._apply_response_headers)
         self._register_error_handlers()
+        # Register request ID middleware for structured logging
+        _request_id_middleware(self.app)
+        # Register health check endpoint
+        register_health_endpoint(self.app)
 
         logger.info('REST API configured: %r', self.config)
         if not self.config.auth_required:
@@ -140,6 +181,12 @@ class RESTAPI(object):
     def _register_error_handlers(self):
         """Translate policy violations into safe, non-informative responses.
 
+        All JSON error responses follow a consistent schema:
+        {
+            "error_code": "AUTHENTICATION_ERROR|VALIDATION_ERROR|ORIGIN_NOT_ALLOWED|...",
+            "message": "Human-readable description",
+            "request_id": "optional request ID for tracing"
+        }
         Nothing here echoes an internal exception message back to the client.
         """
         def _wants_json():
@@ -147,44 +194,82 @@ class RESTAPI(object):
             return 'application/json' in accept or \
                 request.path.startswith('/api/')
 
-        def _handle(exc, status):
+        def _error_response(error_code, message, status, request_id=None):
+            """Build a consistent JSON error response."""
             if _wants_json():
-                body = json.dumps({'error': str(exc)})
+                body = json.dumps({
+                    'error_code': error_code,
+                    'message': message,
+                    'request_id': request_id,
+                })
                 mimetype = 'application/json'
             else:
-                body = str(exc)
+                body = message
                 mimetype = 'text/plain'
             response = self.app.response_class(body, status=status,
                                                mimetype=mimetype)
             response.headers['X-Content-Type-Options'] = 'nosniff'
+            if request_id:
+                response.headers['X-Request-ID'] = request_id
             return response
+
+        def _get_request_id():
+            return getattr(g, 'request_id', None)
 
         @self.app.errorhandler(AuthenticationError)
         def _unauthorized(exc):
-            response = _handle(exc, 401)
+            request_id = _get_request_id()
+            _log_structured(logging.WARNING, 'Authentication failed',
+                            error_code='AUTHENTICATION_ERROR',
+                            request_id=request_id)
+            response = _error_response('AUTHENTICATION_ERROR',
+                                       'valid bearer token required',
+                                       401, request_id)
             response.headers['WWW-Authenticate'] = 'Bearer realm="opencog"'
             return response
 
         @self.app.errorhandler(OriginNotAllowed)
         def _forbidden(exc):
-            return _handle(exc, 403)
+            request_id = _get_request_id()
+            _log_structured(logging.WARNING, 'Origin not allowed',
+                            error_code='ORIGIN_NOT_ALLOWED',
+                            request_id=request_id)
+            return _error_response('ORIGIN_NOT_ALLOWED',
+                                   str(exc), 403, request_id)
 
         @self.app.errorhandler(ValidationError)
         def _bad_request(exc):
-            return _handle(exc, 400)
+            request_id = _get_request_id()
+            _log_structured(logging.WARNING, 'Validation error',
+                            error_code='VALIDATION_ERROR',
+                            request_id=request_id)
+            return _error_response('VALIDATION_ERROR',
+                                   str(exc), 400, request_id)
 
         @self.app.errorhandler(413)
         def _too_large(exc):
-            return _handle('request body too large', 413)
+            request_id = _get_request_id()
+            _log_structured(logging.WARNING, 'Request body too large',
+                            error_code='PAYLOAD_TOO_LARGE',
+                            request_id=request_id)
+            return _error_response('PAYLOAD_TOO_LARGE',
+                                   'request body too large', 413, request_id)
 
         @self.app.errorhandler(500)
         def _server_error(exc):
             # Log the detail, return a generic message. Echoing
             # str(exc) to the client used to disclose file paths and
             # library internals to unauthenticated callers.
+            request_id = _get_request_id()
+            _log_structured(logging.ERROR, 'Unhandled server error',
+                            error_code='INTERNAL_SERVER_ERROR',
+                            request_id=request_id,
+                            path=request.path,
+                            method=request.method)
             logger.exception('Unhandled error handling %s %s',
                              request.method, request.path)
-            return _handle('internal server error', 500)
+            return _error_response('INTERNAL_SERVER_ERROR',
+                                   'internal server error', 500, request_id)
 
     # ------------------------------------------------------------------
     # Lifecycle
