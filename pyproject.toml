@@ -195,6 +195,19 @@ ignore = [
 # cannot see across that function boundary.
 "opencog/python/utility/csv_dataset_parser.py" = ["S310"]
 
+# ----------------------------------------------------------------------
+# Type checking
+# ----------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.10"
+files = ["opencog/python/web/api/apisecurity.py", "opencog/python/web/api/health.py", "opencog/python/web/api/apimain.py"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+# The REST API tree is mid-migration; keep the gate green while annotations
+# are added incrementally.
+
 [tool.ruff.lint.flake8-bandit]
 # Note: B310 (urlopen) is not reachable from the files linted here. The one
 # urlopen call in the tree lives in csv_dataset_parser._open_source, which

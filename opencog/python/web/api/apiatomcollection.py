@@ -3,7 +3,7 @@ __author__ = 'Cosmo Harrigan'
 import logging
 
 from flask import abort, json, current_app, jsonify, request
-from flask.ext.restful import Resource, reqparse, marshal
+from flask_restful import Resource, reqparse, marshal
 import opencog.cogserver
 from opencog.atomspace import Handle, Atom
 from mappers import *

@@ -53,19 +53,19 @@ import os
 import re
 
 __all__ = [
+    "DEFAULT_ALLOWED_ORIGINS",
+    "DEFAULT_BIND_HOST",
+    "DEFAULT_BIND_PORT",
+    "DEFAULT_DEFAULT_LIMIT",
+    "DEFAULT_MAX_COMMAND_LENGTH",
+    "DEFAULT_MAX_CONTENT_LENGTH",
+    "DEFAULT_MAX_LIMIT",
+    "JSONP_CALLBACK_RE",
     "ApiSecurityConfig",
     "ApiSecurityError",
     "AuthenticationError",
     "OriginNotAllowed",
     "ValidationError",
-    "DEFAULT_ALLOWED_ORIGINS",
-    "DEFAULT_BIND_HOST",
-    "DEFAULT_BIND_PORT",
-    "DEFAULT_MAX_COMMAND_LENGTH",
-    "DEFAULT_MAX_CONTENT_LENGTH",
-    "DEFAULT_MAX_LIMIT",
-    "DEFAULT_DEFAULT_LIMIT",
-    "JSONP_CALLBACK_RE",
     "assert_safe_bind",
     "authorize",
     "coerce_limit",
@@ -142,14 +142,14 @@ class ApiSecurityConfig(object):
     """Resolved, validated security policy for one API process."""
 
     __slots__ = (
-        "api_token",
         "allowed_origins",
-        "max_content_length",
-        "max_command_length",
-        "max_limit",
-        "default_limit",
+        "api_token",
         "bind_host",
         "bind_port",
+        "default_limit",
+        "max_command_length",
+        "max_content_length",
+        "max_limit",
     )
 
     def __init__(
@@ -303,7 +303,7 @@ def authorize(config, get_header):
         return True
     presented = extract_bearer_token(get_header)
     if not validate_token(config.api_token, presented):
-        logger.warning("Rejected REST API request with a missing or invalid " "bearer token")
+        logger.warning("Rejected REST API request with a missing or invalid bearer token")
         raise AuthenticationError("valid bearer token required")
     _assert_origin_allowed(config, get_header)
     return True
