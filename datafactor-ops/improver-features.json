@@ -1,0 +1,34 @@
+{
+  "features": [
+    {
+      "id": "lockfile-regeneration-cve-cleanup",
+      "status": "verified",
+      "test": "python -m pip_audit -r requirements.lock.txt"
+    },
+    {
+      "id": "flask-ext-import-compat",
+      "status": "verified",
+      "test": "python -m pytest -q"
+    },
+    {
+      "id": "health-and-metrics-endpoints",
+      "status": "verified",
+      "test": "python -m pytest tests/python/pytest/test_health.py"
+    },
+    {
+      "id": "structured-json-logging",
+      "status": "verified",
+      "test": "python -m ruff check ."
+    },
+    {
+      "id": "typecheck-mypy-gate",
+      "status": "verified",
+      "test": "python -m mypy opencog/python/web/api/apisecurity.py opencog/python/web/api/health.py opencog/python/web/api/apimain.py"
+    },
+    {
+      "id": "lint-format-clean",
+      "status": "verified",
+      "test": "python -m ruff check . && python -m ruff format --check opencog/python/web/api/apisecurity.py tests/python/pytest"
+    }
+  ]
+}

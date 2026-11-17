@@ -3,7 +3,7 @@ __author__ = 'Cosmo Harrigan'
 import logging
 
 from flask import abort, jsonify, request
-from flask.ext.restful import Resource, reqparse
+from flask_restful import Resource, reqparse
 from opencog.scheme_wrapper import scheme_eval
 from flask_restful_swagger import swagger
 

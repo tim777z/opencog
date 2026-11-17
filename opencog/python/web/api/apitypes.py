@@ -1,7 +1,7 @@
 __author__ = 'Cosmo Harrigan'
 
 from flask import json, current_app, request
-from flask.ext.restful import Resource, reqparse
+from flask_restful import Resource, reqparse
 from mappers import *
 from flask_restful_swagger import swagger
 from apisecurity import authorize, validate_jsonp_callback
