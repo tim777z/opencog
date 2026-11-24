@@ -36,6 +36,9 @@ reach the C++ layer and the host. Anything that can talk to those interfaces
 should be assumed to be running code as the cogserver user. The control that
 matters is network reachability plus authentication, not input sanitisation.
 
+For the end-to-end trust boundaries, controls and accepted residual risks of
+`/shell` and `/scheme`, see [THREAT_MODEL.md](THREAT_MODEL.md).
+
 ## What is treated as a vulnerability
 
 * Reaching `/api/v1.1/shell` or `/api/v1.1/scheme` without the configured
@@ -64,6 +67,37 @@ matters is network reachability plus authentication, not input sanitisation.
   AtomSpace operation by an authenticated local operator.
 * Missing hardening in code paths that require a locally modified
   configuration, where the stock configuration is already safe.
+
+## Secret management
+
+The REST API reads every credential from the process environment
+(`OPENCOG_API_TOKEN`, `OPENCOG_API_SECRET_KEY`); none is baked into the image
+or the source tree. The project deliberately does **not** embed a vendor SDK:
+the integration boundary is the process environment, so any secret manager can
+be used without adding a runtime dependency to this repository.
+
+Recommended injection paths, in increasing order of operational complexity:
+
+1. **Local development** — copy `.env.example` to `.env`, restrict it to
+   `chmod 600`, and keep it untracked (CI fails if `.env` is ever committed).
+2. **Docker / Compose** — pass an external env file:
+   `docker compose --env-file /run/secrets/opencog.env up`. Do not put a token
+   in `docker-compose.yml`; build args are visible in image history.
+3. **systemd** — `EnvironmentFile=/run/secrets/opencog.env` with
+   `ProtectHome=yes` and a `tmpfs` mount for `/run/secrets`.
+4. **Kubernetes / Vault / cloud secret managers** — have the orchestrator or
+   an init sidecar fetch the secret at start-up and expose it as an environment
+   variable or a `tmpfs`-backed file. Mounting a file and sourcing it into the
+   environment keeps the token out of `docker inspect` and process listings.
+
+Generate values with `openssl rand -hex 32`. A token is a **full code-execution
+credential**, not a scoped API key: rotate it immediately if it may have been
+exposed, then restart the API process (there is no hot reload today). Remember
+to set `COGSERVER_PASSWORD` in `lib/opencog.conf` separately — the REST token
+does not protect the cogserver's own interface.
+
+Verify that no credential entered the tree with `make secret-scan`; CI runs
+gitleaks on every push and pull request.
 
 ## Hardening checklist for operators
 

@@ -9,9 +9,8 @@ from flask_restful_swagger import swagger
 
 from apisecurity import (
     ApiSecurityConfig,
-    ValidationError,
     authorize,
-    validate_command,
+    validate_command_payload,
 )
 
 logger = logging.getLogger('opencog.restapi')
@@ -105,13 +104,13 @@ cause side-effects.''',
         # before touching the body.
         authorize(config, _get_header)
 
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            raise ValidationError(
-                'Invalid request: a JSON object body is required')
+        # Multi-line expressions are valid Scheme source, so this endpoint
+        # opts in to CR/LF; all other control characters are still rejected.
+        command = validate_command_payload(
+            request.get_json(silent=True),
+            config.max_command_length,
+            allow_line_breaks=True)
 
-        command = validate_command(data.get('command'),
-                                   config.max_command_length)
         try:
             response = scheme_eval(self.atomspace, command)
         except Exception:

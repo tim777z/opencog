@@ -77,21 +77,27 @@ jobs:
             exit 1
           fi
 
+  # Upstream publishes a reusable workflow at
+  # google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml and a
+  # composite action at google/osv-scanner-action/osv-scanner-action. There is
+  # no `scanner-only` action: that reference never resolved, so this job
+  # failed in ~3s on every PR and no dependencies were ever scanned.
+  #
+  # requirements.lock.txt is pip-compile output with a non-standard filename,
+  # so the Python extractor has to be selected explicitly with the
+  # `<ecosystem>:<path>` form. A Dockerfile is not a lockfile and osv-scanner
+  # has no extractor for it; base-image pinning is enforced by hadolint in the
+  # container-hardening job below instead.
   osv-scanner:
     name: osv-scanner (dependency vulnerabilities)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Scan the pinned Python dependencies
-        uses: google/osv-scanner-action/scanner-only@v2
-        with:
-          scan-args: |-
-            -r requirements.lock.txt
-      - name: Scan the container image definition
-        uses: google/osv-scanner-action/scanner-only@v2
-        with:
-          scan-args: |-
-            -r Dockerfile
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.7.1
+    with:
+      scan-args: |-
+        --lockfile=requirements.txt:requirements.lock.txt
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
 
   static-analysis:
     name: static-analysis (semgrep)

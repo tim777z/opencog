@@ -35,12 +35,15 @@ COPY ${LOCKFILE} /tmp/requirements.lock.txt
 # FIND_PACKAGE(AtomSpace 5.0.3 REQUIRED).
 FROM ubuntu:22.04 AS native-deps
 
-# Pin these to a commit SHA, not a branch, before relying on the image for a
-# release. The defaults below track master so that a fresh clone builds.
-ARG COGUTIL_REPO=https://github.com/opencog/cogutils.git
-ARG COGUTIL_REF=master
+# Immutable pins resolved from the release tags that satisfy this tree's
+# CMake requirements (CogUtil 2.0.1, AtomSpace 5.0.3). Keeping them here as
+# build-arg defaults means the image is reproducible from a fresh clone;
+# the Makefile passes the same values from its own single source of truth.
+# GitHub renamed cogutils to cogutil; the old URL only works via redirect.
+ARG COGUTIL_REPO=https://github.com/opencog/cogutil.git
+ARG COGUTIL_REF=faf6b395a0b3dc76876119627fbdfb8c78cf61f7
 ARG ATOMSPACE_REPO=https://github.com/opencog/atomspace.git
-ARG ATOMSPACE_REF=master
+ARG ATOMSPACE_REF=08773653f9d3a04454baa565e7c3b911aae9bd22
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \

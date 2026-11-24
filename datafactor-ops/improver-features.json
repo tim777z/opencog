@@ -29,6 +29,31 @@
       "id": "lint-format-clean",
       "status": "verified",
       "test": "python -m ruff check . && python -m ruff format --check opencog/python/web/api/apisecurity.py tests/python/pytest"
+    },
+    {
+      "id": "osv-scanner-ci-repair",
+      "status": "verified",
+      "test": "python -c \"import yaml; d=yaml.safe_load(open('.github/workflows/security.yml')); assert 'scanner-only' not in str(d['jobs']); assert d['jobs']['osv-scanner']['uses'].endswith('osv-scanner-reusable.yml@v2.7.1'); print('YAML OK:', d['jobs']['osv-scanner']['uses'])\""
+    },
+    {
+      "id": "structured-command-payload-validation",
+      "status": "verified",
+      "test": "python -m pytest tests/python/pytest -q"
+    },
+    {
+      "id": "rest-api-threat-model",
+      "status": "verified",
+      "test": "no-tests"
+    },
+    {
+      "id": "pin-native-dependency-shas",
+      "status": "verified",
+      "test": "python -c \"import re; s=open('Makefile').read()+open('Dockerfile').read(); assert 'COGUTIL_REF     ?= master' not in s and 'ATOMSPACE_REF   ?= master' not in s; assert 'faf6b395a0b3dc76876119627fbdfb8c78cf61f7' in s and '08773653f9d3a04454baa565e7c3b911aae9bd22' in s\""
+    },
+    {
+      "id": "secret-manager-integration-path",
+      "status": "verified",
+      "test": "no-tests"
     }
   ]
 }

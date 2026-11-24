@@ -13,12 +13,18 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 # Pinned sibling repositories. These are the two dependencies that must be
-# built and installed before this tree will configure; the versions below are
-# the ones this branch is known to build against. Change them deliberately.
-COGUTIL_REPO    ?= https://github.com/opencog/cogutils.git
-COGUTIL_REF     ?= master
+# built and installed before this tree will configure. Both refs are immutable
+# commit SHAs resolved from the release tags that satisfy this tree's CMake
+# requirements (FIND_PACKAGE(CogUtil 2.0.1) / FIND_PACKAGE(AtomSpace 5.0.3)):
+#   cogutil   v2.0.3-stable -> faf6b395a0b3dc76876119627fbdfb8c78cf61f7
+#   atomspace v5.0.3-stable -> 08773653f9d3a04454baa565e7c3b911aae9bd22
+# Tracking a moving branch here meant two builds of the same source produced
+# different binaries. Override with ?= only when deliberately bumping a pin.
+# GitHub renamed cogutils to cogutil; the old URL only works via redirect.
+COGUTIL_REPO    ?= https://github.com/opencog/cogutil.git
+COGUTIL_REF     ?= faf6b395a0b3dc76876119627fbdfb8c78cf61f7
 ATOMSPACE_REPO  ?= https://github.com/opencog/atomspace.git
-ATOMSPACE_REF   ?= master
+ATOMSPACE_REF   ?= 08773653f9d3a04454baa565e7c3b911aae9bd22
 
 BUILD_DIR       ?= build
 BUILD_TYPE      ?= Release

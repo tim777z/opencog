@@ -10,9 +10,8 @@ from flask_restful_swagger import swagger
 
 from apisecurity import (
     ApiSecurityConfig,
-    ValidationError,
     authorize,
-    validate_command,
+    validate_command_payload,
 )
 
 logger = logging.getLogger('opencog.restapi')
@@ -111,12 +110,11 @@ server is started with OPENCOG_API_TOKEN set.''',
         # converts to 401/403.  This must happen before any body parsing.
         authorize(config, _get_header)
 
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            raise ValidationError(
-                'Invalid request: a JSON object body is required')
-        command = validate_command(data.get('command'),
-                                   config.max_command_length)
+        # The cogserver shell reads one command per line, so CR/LF in the
+        # payload would inject extra commands. validate_command_payload rejects
+        # them (the Scheme endpoint opts in to multi-line source separately).
+        command = validate_command_payload(
+            request.get_json(silent=True), config.max_command_length)
 
         reply = self._send_to_cogserver(command)
         return jsonify({'status': 'success', 'response': reply})
