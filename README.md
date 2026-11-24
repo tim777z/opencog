@@ -142,20 +142,20 @@ FIND_PACKAGE(CogUtil 2.0.1 REQUIRED)
 FIND_PACKAGE(AtomSpace 5.0.3 REQUIRED)
 ```
 
-The refs are declared in exactly one place each -- the `Makefile` and the
-`Dockerfile` -- so that a release can pin them to commit SHAs:
+Both refs are pinned to immutable commit SHAs resolved from the release tags
+that satisfy the `FIND_PACKAGE` versions above. They are repeated in three
+places -- `Makefile`, `Dockerfile` and the `docker-compose.yml` build args
+(so `.env` can override them) -- and **must be updated together**:
 
-| Repository | URL | Pinned ref variable |
-| ---------- | --- | ------------------- |
-| cogutils   | <https://github.com/opencog/cogutils>   | `COGUTIL_REF`   |
-| atomspace  | <https://github.com/opencog/atomspace>  | `ATOMSPACE_REF`  |
+| Repository | URL | Ref variable | Pinned SHA (tag) |
+| ---------- | --- | ------------ | ---------------- |
+| cogutil (formerly cogutils) | <https://github.com/opencog/cogutil> | `COGUTIL_REF` | `faf6b395a0b3dc76876119627fbdfb8c78cf61f7` (v2.0.3-stable) |
+| atomspace | <https://github.com/opencog/atomspace> | `ATOMSPACE_REF` | `08773653f9d3a04454baa565e7c3b911aae9bd22` (v5.0.3-stable) |
 
-Current values (from `Makefile`): `master` for both. **Before cutting a
-release, replace these with commit SHAs** and record them in
-`CHANGELOG.md`; a tag without pinned dependency SHAs is not a reproducible
-release, only a snapshot.
+Record any pin change in `CHANGELOG.md`. A tag whose dependency refs still
+track a branch is a snapshot, not a reproducible release.
 
-To build a fully pinned image without editing any file:
+To rebuild with different pins without editing any file:
 
 ```bash
 COGUTIL_REF=<sha>   ATOMSPACE_REF=<sha>   docker compose build

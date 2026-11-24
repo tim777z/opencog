@@ -17,13 +17,13 @@ services:
       dockerfile: Dockerfile
       target: runtime
       args:
-        # Pin these to commit SHAs for a byte-reproducible image. The
-        # defaults track master so that a fresh clone builds without
-        # editing anything; see the "Reproducible Build" section of README.md.
-        COGUTIL_REPO: ${COGUTIL_REPO:-https://github.com/opencog/cogutils.git}
-        COGUTIL_REF: ${COGUTIL_REF:-master}
+        # Immutable release-tag SHAs (see Dockerfile and Makefile). These
+        # defaults must stay in sync with those files: a `master` default here
+        # would silently override the Dockerfile's pin and make builds drift.
+        COGUTIL_REPO: ${COGUTIL_REPO:-https://github.com/opencog/cogutil.git}
+        COGUTIL_REF: ${COGUTIL_REF:-faf6b395a0b3dc76876119627fbdfb8c78cf61f7}
         ATOMSPACE_REPO: ${ATOMSPACE_REPO:-https://github.com/opencog/atomspace.git}
-        ATOMSPACE_REF: ${ATOMSPACE_REF:-master}
+        ATOMSPACE_REF: ${ATOMSPACE_REF:-08773653f9d3a04454baa565e7c3b911aae9bd22}
     image: opencog:dev
     # cogserver shell, cogserver python shell, REST API, embodiment/Unity
     # ports. Bound to loopback: the REST API can execute Scheme, so it must

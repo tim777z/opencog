@@ -71,6 +71,7 @@ __all__ = [
     "coerce_limit",
     "is_origin_allowed",
     "validate_command",
+    "validate_command_payload",
     "validate_jsonp_callback",
     "validate_token",
 ]
@@ -95,6 +96,16 @@ DEFAULT_DEFAULT_LIMIT = 100
 #: reflected XSS primitive because the response is served as
 #: ``application/javascript``.
 JSONP_CALLBACK_RE = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*){0,2}$")
+
+# C0 controls and DEL have no role in a command sent to the cogserver. CR/LF
+# matter most: the cogserver shell is a line-oriented protocol, so an embedded
+# line break would smuggle a second command past a single-command check and
+# forge log lines. Horizontal tab is allowed because both shell and Scheme
+# commands legitimately use it for formatting.
+_UNSAFE_COMMAND_CHARS = re.compile(r"[\x00-\x08\x0a-\x1f\x7f]")
+# Scheme source may span lines, so the interpreter endpoint opts in to CR/LF.
+# The remaining controls are still rejected.
+_UNSAFE_COMMAND_CHARS_MULTILINE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 _LOOPBACK_HOSTS = frozenset(("127.0.0.1", "localhost", "::1", "0:0:0:0:0:0:0:1"))
 
@@ -401,12 +412,15 @@ def coerce_limit(raw, maximum, default):
     return value
 
 
-def validate_command(command, max_length):
+def validate_command(command, max_length, allow_line_breaks=False):
     """Validate a cogserver/Scheme command string.
 
     Returns the command unchanged on success; raises :class:`ValidationError`
     otherwise.  Length is bounded because both consumers interpret the string
-    and an unbounded one is a cheap way to pin a CPU core.
+    and an unbounded one is a cheap way to pin a CPU core.  Control characters
+    are rejected because the cogserver shell is line-oriented and because they
+    can forge log entries.  ``allow_line_breaks`` is an explicit opt-in for the
+    Scheme endpoint, where multi-line source is legitimate.
     """
     if command is None:
         raise ValidationError("required parameter command is missing")
@@ -423,6 +437,25 @@ def validate_command(command, max_length):
     max_length = int(max_length)
     if len(command) > max_length:
         raise ValidationError("command must not exceed %d characters" % max_length)
-    if "\x00" in command:
-        raise ValidationError("command must not contain NUL bytes")
+    pattern = _UNSAFE_COMMAND_CHARS_MULTILINE if allow_line_breaks else _UNSAFE_COMMAND_CHARS
+    if pattern.search(command):
+        raise ValidationError("command must not contain control characters")
     return command
+
+
+def validate_command_payload(body, max_length, allow_line_breaks=False):
+    """Validate a parsed JSON request body for ``/shell`` and ``/scheme``.
+
+    This centralises the body-shape check that used to be duplicated in both
+    resources, so a fix applied to one endpoint cannot silently be missing
+    from the other.  ``body`` is the value returned by ``get_json(silent=True)``
+    and must be a JSON object containing a ``command`` string (additional
+    keys are ignored for client compatibility).  Returns
+    the validated command; raises :class:`ValidationError` with a short,
+    client-facing message on any violation.
+    """
+    if not isinstance(body, dict):
+        raise ValidationError("Invalid request: a JSON object body is required")
+    if "command" not in body:
+        raise ValidationError("required parameter command is missing")
+    return validate_command(body["command"], max_length, allow_line_breaks=allow_line_breaks)
